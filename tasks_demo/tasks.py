@@ -105,6 +105,13 @@ def celery_http_fanout(url="https://httpbin.org/get", fanout=10, enqueued_at=Non
         results = list(executor.map(fetch, [url] * fanout))
     return f"HTTP Fanout completed: {len(results)} requests"
 
+@shared_task(name='celery_throughput_burst')
+@record_metric('celery', 'throughput_burst')
+def celery_throughput_burst(payload, enqueued_at=None):
+    # Simulate processing a large payload
+    data_len = len(str(payload))
+    return f"Processed payload of size {data_len}"
+
 # --- Django Tasks ---
 
 @task
@@ -151,3 +158,10 @@ def django_http_fanout(url="https://httpbin.org/get", fanout=10, enqueued_at=Non
     with ThreadPoolExecutor(max_workers=fanout) as executor:
         results = list(executor.map(fetch, [url] * fanout))
     return f"HTTP Fanout completed: {len(results)} requests"
+
+@task
+@record_metric('django', 'throughput_burst')
+def django_throughput_burst(payload, enqueued_at=None):
+    # Simulate processing a large payload
+    data_len = len(str(payload))
+    return f"Processed payload of size {data_len}"

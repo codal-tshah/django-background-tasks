@@ -12,6 +12,7 @@ class TaskMetric(models.Model):
         ('batch', 'Batch'),
         ('db_contention', 'DB Contention'),
         ('http_fanout', 'HTTP Fanout'),
+        ('throughput_burst', 'Throughput Burst'),
     ]
     
     system = models.CharField(max_length=20, choices=SYSTEM_CHOICES)

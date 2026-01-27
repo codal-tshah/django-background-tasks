@@ -33,14 +33,14 @@ The following tests were conducted on a 4-core machine with 4 concurrent worker 
 | **Celery** | Email (I/O) | 100 | 0.504 | 7.759 | 14.709 | 100.0% |
 | **Celery** | DB Contention | 100 | 0.007 | 7.850 | 14.900 | 100.0% |
 | **Celery** | HTTP Fan-out | 100 | 1.225 | 8.100 | 15.200 | 100.0% |
+| **Celery** | Throughput Burst | 1000 | 0.002 | 0.738 | 0.815 | 100.0% |
 | **Django** | Email (I/O) | 100 | 0.505 | 8.257 | 15.168 | 100.0% |
 | **Django** | DB Contention | 100 | 0.006 | 8.663 | 16.067 | 100.0% |
 | **Django** | HTTP Fan-out | 100 | 1.211 | 8.673 | 16.077 | 100.0% |
+| **Django** | Throughput Burst | 1000 | 0.001 | 6.738 | 6.948 | 100.0% |
 
 ### Analysis
-- **Throughput**: Both systems successfully handled the load. Celery showed slightly lower average latency for DB tasks, though both were extremely fast due to batch operations.
-- **Latency (p95)**: Under heavy load, both systems showed similar tail latency. In the HTTP Fan-out test, Django tasks showed slightly higher latency peaks (+5%), likely due to the database overhead during the longer task execution window.
-- **Database Contention**: Django Tasks handled bulk operations well, but as task volume increases, we expect higher "Enqueue Latency" in Django as it must write to the same DB that the tasks are updating.
+- **Throughput Burst (The Celery Win)**: In the 1000-task burst test, Celery processed tasks with an average queue latency of **0.7s**. Django Tasks lagged significantly with **6.7s** average latency. This is because Redis can handle massive enqueue/dequeue operations in-memory, while Django must wait for the DB worker to poll and the DB to manage row locks for every task.
 - **HTTP Fan-out**: Both systems handled thread-based fan-out identically, showing that for long-running I/O tasks, the choice of broker has minimal impact on the task's internal logic execution.
 
 ---
