@@ -1,12 +1,14 @@
 import time
 import hashlib
 import functools
+import httpx
+from concurrent.futures import ThreadPoolExecutor
 from celery import shared_task
 from django.tasks import task
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
-from .models import TaskMetric
+from .models import TaskMetric, ContentionModel
 
 def record_metric(system, task_type):
     def decorator(func):
@@ -82,6 +84,27 @@ def celery_batch_process(items, enqueued_at=None):
         results.append(heavy_computation(10**4))
     return f"Processed {len(items)} items"
 
+@shared_task(name='celery_db_contention')
+@record_metric('celery', 'db_contention')
+def celery_db_contention(count=50, enqueued_at=None):
+    # Bulk create
+    objs = [ContentionModel(data=f"Data {i}") for i in range(count)]
+    ContentionModel.objects.bulk_create(objs)
+    # Bulk update
+    ContentionModel.objects.all().update(data="Updated")
+    return f"DB Contention task completed for {count} records"
+
+@shared_task(name='celery_http_fanout')
+@record_metric('celery', 'http_fanout')
+def celery_http_fanout(url="https://httpbin.org/get", fanout=10, enqueued_at=None):
+    def fetch(u):
+        with httpx.Client() as client:
+            return client.get(u).status_code
+
+    with ThreadPoolExecutor(max_workers=fanout) as executor:
+        results = list(executor.map(fetch, [url] * fanout))
+    return f"HTTP Fanout completed: {len(results)} requests"
+
 # --- Django Tasks ---
 
 @task
@@ -107,3 +130,24 @@ def django_batch_process(items, enqueued_at=None):
     for item in items:
         results.append(heavy_computation(10**4))
     return f"Processed {len(items)} items"
+
+@task
+@record_metric('django', 'db_contention')
+def django_db_contention(count=50, enqueued_at=None):
+    # Bulk create
+    objs = [ContentionModel(data=f"Data {i}") for i in range(count)]
+    ContentionModel.objects.bulk_create(objs)
+    # Bulk update
+    ContentionModel.objects.all().update(data="Updated")
+    return f"DB Contention task completed for {count} records"
+
+@task
+@record_metric('django', 'http_fanout')
+def django_http_fanout(url="https://httpbin.org/get", fanout=10, enqueued_at=None):
+    def fetch(u):
+        with httpx.Client() as client:
+            return client.get(u).status_code
+
+    with ThreadPoolExecutor(max_workers=fanout) as executor:
+        results = list(executor.map(fetch, [url] * fanout))
+    return f"HTTP Fanout completed: {len(results)} requests"

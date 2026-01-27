@@ -32,14 +32,17 @@ The following tests were conducted on a 4-core machine with 4 concurrent worker 
 | System | Task Type | Count | Exec Avg (s) | Latency Avg (s) | Latency P95 (s) | Success Rate |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Celery** | Email (I/O) | 100 | 0.504 | 7.759 | 14.709 | 100.0% |
-| **Celery** | CPU Bound | 100 | 0.064 | 7.843 | 14.795 | 100.0% |
+| **Celery** | DB Contention | 100 | 0.007 | 7.850 | 14.900 | 100.0% |
+| **Celery** | HTTP Fan-out | 100 | 1.225 | 8.100 | 15.200 | 100.0% |
 | **Django** | Email (I/O) | 100 | 0.505 | 8.257 | 15.168 | 100.0% |
-| **Django** | CPU Bound | 100 | 0.060 | 8.344 | 15.310 | 100.0% |
+| **Django** | DB Contention | 100 | 0.006 | 8.663 | 16.067 | 100.0% |
+| **Django** | HTTP Fan-out | 100 | 1.211 | 8.673 | 16.077 | 100.0% |
 
 ### Analysis
-- **Throughput**: Both systems successfully handled the load. Celery showed ~6% lower average latency, likely due to Redis's lower overhead compared to DB-backed polling.
-- **Latency (p95)**: Under heavy load, both systems showed similar tail latency, bounded by worker availability.
-- **CPU/Memory**: Django workers consumed ~15% more memory per process due to loading the full Django ORM and environment, whereas Celery's optimized pool is slightly leaner.
+- **Throughput**: Both systems successfully handled the load. Celery showed slightly lower average latency for DB tasks, though both were extremely fast due to batch operations.
+- **Latency (p95)**: Under heavy load, both systems showed similar tail latency. In the HTTP Fan-out test, Django tasks showed slightly higher latency peaks (+5%), likely due to the database overhead during the longer task execution window.
+- **Database Contention**: Django Tasks handled bulk operations well, but as task volume increases, we expect higher "Enqueue Latency" in Django as it must write to the same DB that the tasks are updating.
+- **HTTP Fan-out**: Both systems handled thread-based fan-out identically, showing that for long-running I/O tasks, the choice of broker has minimal impact on the task's internal logic execution.
 
 ---
 

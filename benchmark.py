@@ -10,7 +10,9 @@ django.setup()
 
 from tasks_demo.tasks import (
     celery_send_email, celery_io_bound, celery_cpu_bound, celery_batch_process,
-    django_send_email, django_io_bound, django_cpu_bound, django_batch_process
+    celery_db_contention, celery_http_fanout,
+    django_send_email, django_io_bound, django_cpu_bound, django_batch_process,
+    django_db_contention, django_http_fanout
 )
 from tasks_demo.models import TaskMetric, WorkerMetric
 
@@ -22,6 +24,8 @@ def trigger_celery_tasks(count):
         celery_io_bound.delay(0.2, enqueued_at=now)
         celery_cpu_bound.delay(10**5, enqueued_at=now)
         celery_batch_process.delay([i for i in range(10)], enqueued_at=now)
+        celery_db_contention.delay(50, enqueued_at=now)
+        celery_http_fanout.delay(fanout=5, enqueued_at=now)
 
 def trigger_django_tasks(count):
     print(f"Triggering {count} Django tasks...")
@@ -31,6 +35,8 @@ def trigger_django_tasks(count):
         django_io_bound.enqueue(0.2, enqueued_at=now)
         django_cpu_bound.enqueue(10**5, enqueued_at=now)
         django_batch_process.enqueue([i for i in range(10)], enqueued_at=now)
+        django_db_contention.enqueue(50, enqueued_at=now)
+        django_http_fanout.enqueue(fanout=5, enqueued_at=now)
 
 def run_benchmark(batch_size=10, iterations=5):
     # Clear previous metrics
@@ -52,7 +58,7 @@ def run_benchmark(batch_size=10, iterations=5):
 
 def analyze_results():
     systems = ['celery', 'django']
-    task_types = ['email', 'io', 'cpu', 'batch']
+    task_types = ['email', 'io', 'cpu', 'batch', 'db_contention', 'http_fanout']
     
     print("\n" + "="*70)
     print(f"{'System':<10} | {'Task':<10} | {'Count':<6} | {'Exec Avg':<8} | {'Lat Avg':<8} | {'Lat P95':<8} | {'Success'}")
