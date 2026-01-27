@@ -1,7 +1,6 @@
 # Internal Engineering Evaluation: Django Tasks vs. Celery
 
 **Date**: 2026-01-27  
-**Author**: Antigravity AI  
 **Subject**: Production-readiness evaluation of Django 6.0's built-in Task framework vs. Celery.
 
 ## 1. Executive Summary
@@ -82,9 +81,6 @@ In this demo, metrics are gathered via:
 ---
 
 ## 7. Evidence-Based Recommendation
-
-**Antigravity recommends:**
-
 - Use **Django Tasks** for 80% of standard web applications. It is sufficient for sending emails, generating reports, and light I/O tasks where the volume is < 500 tasks/second and atomic DB operations are preferred.
 - Use **Celery** for high-scale applications, distributed systems, or when complex task orchestration (pipelines) is required.
 
