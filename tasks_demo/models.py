@@ -10,6 +10,9 @@ class TaskMetric(models.Model):
         ('io', 'I/O Bound'),
         ('cpu', 'CPU Bound'),
         ('batch', 'Batch'),
+        ('db_contention', 'DB Contention'),
+        ('http_fanout', 'HTTP Fanout'),
+        ('throughput_burst', 'Throughput Burst'),
     ]
     
     system = models.CharField(max_length=20, choices=SYSTEM_CHOICES)
@@ -33,3 +36,8 @@ class WorkerMetric(models.Model):
     cpu_percent = models.FloatField()
     memory_usage_mb = models.FloatField()
     active_tasks = models.IntegerField(default=0)
+
+class ContentionModel(models.Model):
+    data = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)

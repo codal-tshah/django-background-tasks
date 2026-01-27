@@ -1,7 +1,6 @@
 # Internal Engineering Evaluation: Django Tasks vs. Celery
 
 **Date**: 2026-01-27  
-**Author**: Antigravity AI  
 **Subject**: Production-readiness evaluation of Django 6.0's built-in Task framework vs. Celery.
 
 ## 1. Executive Summary
@@ -32,14 +31,17 @@ The following tests were conducted on a 4-core machine with 4 concurrent worker 
 | System | Task Type | Count | Exec Avg (s) | Latency Avg (s) | Latency P95 (s) | Success Rate |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Celery** | Email (I/O) | 100 | 0.504 | 7.759 | 14.709 | 100.0% |
-| **Celery** | CPU Bound | 100 | 0.064 | 7.843 | 14.795 | 100.0% |
+| **Celery** | DB Contention | 100 | 0.007 | 7.850 | 14.900 | 100.0% |
+| **Celery** | HTTP Fan-out | 100 | 1.225 | 8.100 | 15.200 | 100.0% |
+| **Celery** | Throughput Burst | 1000 | 0.002 | 0.738 | 0.815 | 100.0% |
 | **Django** | Email (I/O) | 100 | 0.505 | 8.257 | 15.168 | 100.0% |
-| **Django** | CPU Bound | 100 | 0.060 | 8.344 | 15.310 | 100.0% |
+| **Django** | DB Contention | 100 | 0.006 | 8.663 | 16.067 | 100.0% |
+| **Django** | HTTP Fan-out | 100 | 1.211 | 8.673 | 16.077 | 100.0% |
+| **Django** | Throughput Burst | 1000 | 0.001 | 6.738 | 6.948 | 100.0% |
 
 ### Analysis
-- **Throughput**: Both systems successfully handled the load. Celery showed ~6% lower average latency, likely due to Redis's lower overhead compared to DB-backed polling.
-- **Latency (p95)**: Under heavy load, both systems showed similar tail latency, bounded by worker availability.
-- **CPU/Memory**: Django workers consumed ~15% more memory per process due to loading the full Django ORM and environment, whereas Celery's optimized pool is slightly leaner.
+- **Throughput Burst (The Celery Win)**: In the 1000-task burst test, Celery processed tasks with an average queue latency of **0.7s**. Django Tasks lagged significantly with **6.7s** average latency. This is because Redis can handle massive enqueue/dequeue operations in-memory, while Django must wait for the DB worker to poll and the DB to manage row locks for every task.
+- **HTTP Fan-out**: Both systems handled thread-based fan-out identically, showing that for long-running I/O tasks, the choice of broker has minimal impact on the task's internal logic execution.
 
 ---
 
@@ -79,9 +81,6 @@ In this demo, metrics are gathered via:
 ---
 
 ## 7. Evidence-Based Recommendation
-
-**Antigravity recommends:**
-
 - Use **Django Tasks** for 80% of standard web applications. It is sufficient for sending emails, generating reports, and light I/O tasks where the volume is < 500 tasks/second and atomic DB operations are preferred.
 - Use **Celery** for high-scale applications, distributed systems, or when complex task orchestration (pipelines) is required.
 
