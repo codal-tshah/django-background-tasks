@@ -11,7 +11,8 @@ This project provides a production-quality comparison between Django's built-in 
 - `tasks_demo/tasks.py`: Implementation of workloads (Email, I/O, CPU, Batch, DB Contention, HTTP Fan-out, Throughput Burst).
 - `benchmark.py`: Load testing script.
 - `demo_project/settings.py`: Integrated configuration for both systems.
-- `Django_Tasks_vs_Celery_Evaluation.md`: Final analysis and recommendation.
+- `SPIKE_REPORT.md`: Comprehensive engineering analysis and final recommendation (Main Doc).
+- `Spike_Report_Django_Background_Tasks.docx`: Professional documentation for stakeholders.
 
 ## How to Run the Demo
 
