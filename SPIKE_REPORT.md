@@ -78,8 +78,95 @@ The **Throughput Burst** test revealed a clear limitation. Celery (via Redis) ha
 
 ---
 
-## 7. Overall Verdict & Recommendation
+## 7. Alternative Database Backend Options for Django Tasks
+
+### Can Django Tasks Use a Separate Database (like MongoDB/Redis)?
+**Short Answer**: Technically possible but **NOT recommended** and defeats the core value proposition.
+
+### Why Using a Separate Database is Problematic:
+1.  **Loss of Transactional Integrity**: The primary advantage of Django Tasks is that tasks are enqueued atomically with your application's database transactions. If you use a separate database (MongoDB, Redis, or even a separate PostgreSQL instance), you lose this guarantee. A task could be enqueued even if the triggering transaction rolls back.
+
+2.  **Increased Complexity**: You would need to manage connection pooling, migrations, and monitoring for an additional database. At this point, you're essentially reimplementing Celery's architecture with none of its maturity.
+
+3.  **No Performance Gain**: If you're using Redis as the Django Tasks backend, you've essentially built a slower version of Celery. Redis-backed Django Tasks still use ORM polling (slower than Celery's native protocol), so you get the worst of both worlds.
+
+### The Correct Approach:
+*   **For Standard Apps**: Use the default `DatabaseBackend` with your primary PostgreSQL/SQLite database.
+*   **For High-Throughput Apps**: Skip Django Tasks entirely and use Celery with Redis. Don't try to "fix" Django Tasks by bolting on external databases.
+
+---
+
+## 8. Expanded Ideal Scenarios: When Django Tasks Fails
+
+### Scenario D: Video Transcoding Pipeline
+*   **Ideal Choice**: **Celery**
+*   **Reasoning**: Video processing requires:
+    *   **Long-running tasks** (10+ minutes per video)
+    *   **Task chaining** (Download → Transcode → Upload → Notify)
+    *   **Priority queues** (Premium users get faster processing)
+    *   Django Tasks lacks native support for complex workflows and priority routing.
+
+### Scenario E: Real-time Chat Message Delivery
+*   **Ideal Choice**: **Celery** (or WebSockets/Channels)
+*   **Reasoning**: Chat requires sub-100ms latency. Django Tasks' database polling introduces 1-5 second delays even under light load. The database becomes a bottleneck when handling 1000+ messages/second.
+
+### Scenario F: Scheduled Periodic Tasks (Cron Jobs)
+*   **Ideal Choice**: **Celery Beat** or **Django-Q**
+*   **Reasoning**: Django Tasks (as of 6.0) does **not include a scheduler**. You would need to use `cron` or a third-party library. Celery Beat provides a mature, distributed scheduler with timezone support and dynamic task registration.
+
+### Scenario G: Distributed Microservices Architecture
+*   **Ideal Choice**: **Celery**
+*   **Reasoning**: If you have multiple services (User Service, Payment Service, Notification Service), they need to share a task queue. Django Tasks is tightly coupled to a single Django application's database. Celery's broker-based architecture allows cross-service task distribution.
+
+### Scenario H: High-Frequency Stock Price Updates
+*   **Ideal Choice**: **Celery**
+*   **Reasoning**: Updating 10,000+ stock prices every second requires:
+    *   In-memory broker (Redis) for instant enqueue/dequeue
+    *   Horizontal worker scaling across multiple machines
+    *   Django Tasks' database backend cannot handle this write volume without severe performance degradation.
+
+---
+
+## 9. Django Tasks Execution Limits & Constraints
+
+### Task Execution Time Limits:
+*   **No Built-in Timeout**: Django Tasks does not enforce a maximum execution time by default. A runaway task can block a worker indefinitely.
+*   **Workaround**: You must implement manual timeouts using Python's `signal` module or process monitoring tools.
+*   **Celery Advantage**: Celery has built-in `task_time_limit` and `task_soft_time_limit` settings that automatically kill long-running tasks.
+
+### Task Retention & Queue Depth:
+*   **Database Storage**: All pending tasks are stored in the `django_tasks_database_dbtaskresult` table. If you enqueue 1 million tasks, you're writing 1 million rows to your primary database.
+*   **Performance Impact**: Large task queues (>100,000 pending tasks) can slow down your application's regular queries due to table locking and index bloat.
+*   **Celery Advantage**: Redis stores tasks in-memory with automatic expiration. Old task results can be configured to auto-delete after N days.
+
+### Concurrency Limits:
+*   **Worker Scaling**: Each `db_worker` process is a single Python process. To scale horizontally, you must manually start workers on multiple servers and ensure they don't conflict (unique worker IDs).
+*   **Celery Advantage**: Celery workers can auto-discover each other and distribute load via the broker. Adding capacity is as simple as `celery worker --autoscale=10,3`.
+
+### Task Result Storage:
+*   **No Built-in Result Backend**: Django Tasks stores results in the database by default, but there's no API to query "all failed tasks in the last hour" without writing raw SQL.
+*   **Celery Advantage**: Celery's result backend (Redis/Database) has rich query APIs and integrates with monitoring tools like Flower.
+
+---
+
+## 10. Overall Verdict & Recommendation
 This spike demonstrates that **Django Tasks (Django 6.0+) is a production-ready replacement for Celery for small-to-medium datasets and standard web applications.**
 
-*   **RECOMMENDATION**: Adopt Django Tasks as the default background job system for this project.
-*   **EXCEPTION**: Continue using Celery only for specific microservices that require high-velocity task ingestion or complex orchestration (pipelines).
+### When to Use Django Tasks:
+*   Transactional emails (user sign-up, password reset)
+*   Generating reports/PDFs (< 5 minutes execution time)
+*   Webhook callbacks (< 1000/hour)
+*   Background data cleanup (nightly jobs with low concurrency)
+
+### When to Use Celery:
+*   Real-time notifications (chat, alerts)
+*   Video/image processing pipelines
+*   Scheduled periodic tasks (cron-like jobs)
+*   Distributed microservices
+*   High-frequency tasks (>1000/second)
+*   Tasks requiring priority queues or complex routing
+
+### Final Recommendation:
+*   **ADOPT**: Django Tasks as the default for this project's standard background jobs.
+*   **EXCEPTION**: Use Celery for high-throughput microservices or when task orchestration (chains/groups) is required.
+*   **DO NOT**: Try to "scale" Django Tasks by using external databases. If you need that level of performance, use Celery from the start.
